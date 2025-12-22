@@ -1,0 +1,41 @@
+{
+  "name": "@innovabound-ecomm-platform/returns-service",
+  "version": "1.0.0",
+  "description": "Returns and RMA management service for the e-commerce platform",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "returns",
+    "rma",
+    "refunds",
+    "exchanges",
+    "ecommerce"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@innovabound-ecomm-platform/kafka-client": "workspace:*",
+    "@innovabound-ecomm-platform/returns-db": "workspace:*",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "express": "^5.0.1",
+    "zod": "^3.25.36"
+  },
+  "devDependencies": {
+    "@innovabound-ecomm-platform/eslint-config": "workspace:*",
+    "@innovabound-ecomm-platform/typescript-config": "workspace:*",
+    "@types/cookie-parser": "^1.4.8",
+    "@types/cors": "^2.8.18",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.10.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.0-beta"
+  }
+}
