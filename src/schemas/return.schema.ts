@@ -8,34 +8,33 @@ export const ReturnRequestStatusSchema = z.enum([
   'PENDING',
   'APPROVED',
   'REJECTED',
-  'LABEL_GENERATED',
   'SHIPPED',
   'RECEIVED',
   'INSPECTING',
-  'INSPECTED',
+  'INSPECTION_PASSED',
+  'INSPECTION_FAILED',
   'PROCESSING_REFUND',
   'COMPLETED',
-  'CLOSED',
   'CANCELLED',
 ]);
 
 export const ReturnReasonSchema = z.enum([
-  'DEFECTIVE',
   'WRONG_ITEM',
+  'DEFECTIVE',
+  'DAMAGED',
   'NOT_AS_DESCRIBED',
   'CHANGED_MIND',
   'SIZE_FIT',
-  'ARRIVED_LATE',
-  'DAMAGED_IN_SHIPPING',
-  'DUPLICATE_ORDER',
+  'QUALITY',
+  'LATE_DELIVERY',
   'OTHER',
 ]);
 
 export const ReturnResolutionSchema = z.enum([
-  'REFUND',
+  'REFUND_ORIGINAL',
+  'REFUND_WALLET',
   'EXCHANGE',
-  'STORE_CREDIT',
-  'REPAIR',
+  'REPLACEMENT',
 ]);
 
 export const RefundStatusSchema = z.enum([
@@ -43,7 +42,7 @@ export const RefundStatusSchema = z.enum([
   'PROCESSING',
   'COMPLETED',
   'FAILED',
-  'CANCELLED',
+  'PARTIALLY_COMPLETED',
 ]);
 
 export const RefundTypeSchema = z.enum([
@@ -53,14 +52,15 @@ export const RefundTypeSchema = z.enum([
 ]);
 
 export const InspectionResultSchema = z.enum([
-  'PASSED',
-  'FAILED',
-  'PARTIAL',
+  'PASS',
+  'FAIL_DAMAGED',
+  'FAIL_USED',
+  'FAIL_WRONG_ITEM',
+  'FAIL_MISSING_PARTS',
 ]);
 
 export const ExchangeStatusSchema = z.enum([
   'PENDING',
-  'APPROVED',
   'PROCESSING',
   'SHIPPED',
   'COMPLETED',
@@ -68,10 +68,12 @@ export const ExchangeStatusSchema = z.enum([
 ]);
 
 export const ReturnDispositionSchema = z.enum([
-  'RESTOCK',
-  'REFURBISH',
-  'DONATE',
-  'DESTROY',
+  'SELLABLE',
+  'REFURBISHED',
+  'DAMAGED',
+  'PARTS_ONLY',
+  'DISPOSE',
+  'RETURN_TO_VENDOR',
 ]);
 
 export const PaymentProviderSchema = z.enum([
@@ -90,19 +92,20 @@ export const CreateReturnPolicySchema = z.object({
   description: z.string().optional(),
   isDefault: z.boolean().optional().default(false),
   returnWindowDays: z.number().int().positive().default(30),
-  extendedWindowDays: z.number().int().positive().optional(),
+  exchangeWindowDays: z.number().int().positive().default(30),
   restockingFeePercent: z.number().min(0).max(100).default(0),
-  freeReturnThreshold: z.number().int().positive().optional(),
+  returnShippingPaidBy: z.enum(['customer', 'store']).optional().default('customer'),
   requiresReceipt: z.boolean().optional().default(false),
   requiresOriginalPackaging: z.boolean().optional().default(false),
-  finalSaleExcluded: z.boolean().optional().default(true),
-  allowPartialReturns: z.boolean().optional().default(true),
+  requiresUnopened: z.boolean().optional().default(false),
+  requiresTags: z.boolean().optional().default(false),
+  allowRefund: z.boolean().optional().default(true),
+  allowExchange: z.boolean().optional().default(true),
+  allowStoreCredit: z.boolean().optional().default(true),
   allowedReasons: z.array(ReturnReasonSchema).optional(),
-  excludedReasons: z.array(ReturnReasonSchema).optional(),
-  allowedResolutions: z.array(ReturnResolutionSchema).optional(),
-  excludedCategories: z.array(z.string()).optional(),
-  excludedProducts: z.array(z.string()).optional(),
-  conditions: z.record(z.unknown()).optional(),
+  targetCategories: z.array(z.string()).optional(),
+  excludeCategories: z.array(z.string()).optional(),
+  excludedCategories: z.array(z.string()).optional(), // alias for excludeCategories
   isActive: z.boolean().optional().default(true),
 });
 
@@ -115,8 +118,6 @@ export const UpdateReturnPolicySchema = CreateReturnPolicySchema.partial();
 export const CreateReturnRequestSchema = z.object({
   orderId: z.string().min(1),
   userId: z.string().optional(), // Will be set from auth if not provided
-  reason: ReturnReasonSchema,
-  reasonDetails: z.string().optional(),
   requestedResolution: ReturnResolutionSchema,
   customerNotes: z.string().optional(),
   items: z.array(z.object({
@@ -134,8 +135,6 @@ export const CreateReturnRequestSchema = z.object({
 });
 
 export const UpdateReturnRequestSchema = z.object({
-  reason: ReturnReasonSchema.optional(),
-  reasonDetails: z.string().optional(),
   requestedResolution: ReturnResolutionSchema.optional(),
   customerNotes: z.string().optional(),
   adminNotes: z.string().optional(),
@@ -180,7 +179,7 @@ export const AddReturnItemSchema = z.object({
 });
 
 export const UpdateReturnItemSchema = z.object({
-  quantity: z.number().int().positive().optional(),
+  quantityReturning: z.number().int().positive().optional(),
   reason: ReturnReasonSchema.optional(),
   reasonDetails: z.string().optional(),
   images: z.array(z.string().url()).optional(),

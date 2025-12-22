@@ -1,6 +1,8 @@
 import { Router, type Response } from 'express';
-import { prisma } from '@innovabound-ecomm-platform/returns-db';
+import { getReturnsPrisma } from '../lib/db';
 import { requireAuth, requirePermission, type AuthenticatedRequest } from '../middleware/auth';
+
+const prisma = getReturnsPrisma();
 import {
   SubmitInspectionSchema,
 } from '../schemas/return.schema';
@@ -58,7 +60,7 @@ router.post(
       const existingReturn = await prisma.returnRequest.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
             { rmaNumber: id },
           ],
@@ -121,13 +123,13 @@ router.post(
         });
       }
 
-      // Update return status
+      // Update return status based on inspection result
+      const newStatus = data.overallResult === 'PASS' ? 'INSPECTION_PASSED' : 'INSPECTION_FAILED';
+      
       await prisma.returnRequest.update({
         where: { id: existingReturn.id },
         data: {
-          status: 'INSPECTED',
-          inspectedAt: new Date(),
-          inspectedBy: req.user!.id,
+          status: newStatus,
           updatedBy: req.user!.id,
         },
       });
@@ -137,7 +139,7 @@ router.post(
         existingReturn.id,
         'inspection_completed',
         existingReturn.status,
-        'INSPECTED',
+        newStatus,
         `Result: ${data.overallResult}${data.notes ? ` - ${data.notes}` : ''}`,
         req.user!.id,
         'ADMIN'
@@ -166,7 +168,7 @@ router.get(
       const existingReturn = await prisma.returnRequest.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
             { rmaNumber: id },
           ],
@@ -198,7 +200,7 @@ router.get(
 
       res.json({
         ...existingReturn.inspection,
-        itemResults: existingReturn.items.map((item) => ({
+        itemResults: existingReturn.items.map((item: { id: number; productName: string; variantName: string | null; inspectionResult: string | null; inspectionNotes: string | null; condition: string | null }) => ({
           itemId: item.id,
           productName: item.productName,
           variantName: item.variantName,
@@ -229,7 +231,7 @@ router.post(
       const existingReturn = await prisma.returnRequest.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
             { rmaNumber: id },
           ],

@@ -1,6 +1,8 @@
 import { Router, type Response } from 'express';
-import { prisma } from '@innovabound-ecomm-platform/returns-db';
+import { getReturnsPrisma } from '../lib/db';
 import { requireAuth, requirePermission, type AuthenticatedRequest } from '../middleware/auth';
+
+const prisma = getReturnsPrisma();
 import {
   CreateExchangeSchema,
   UpdateExchangeSchema,
@@ -102,7 +104,7 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
     const exchange = await prisma.exchange.findFirst({
       where: {
         OR: [
-          { id: parseInt(id) || 0 },
+          { id: parseInt(id as string) || 0 },
           { uuid: id },
         ],
       },
@@ -162,7 +164,7 @@ router.post(
       const existingReturn = await prisma.returnRequest.findFirst({
         where: {
           OR: [
-            { id: parseInt(returnId) || 0 },
+            { id: parseInt(returnId as string) || 0 },
             { uuid: returnId },
             { rmaNumber: returnId },
           ],
@@ -183,7 +185,7 @@ router.post(
       }
 
       // Verify return is approved for exchange
-      if (existingReturn.approvedResolution !== 'EXCHANGE') {
+      if (existingReturn.actualResolution !== 'EXCHANGE') {
         res.status(400).json({ error: 'Return is not approved for exchange' });
         return;
       }
@@ -268,7 +270,7 @@ router.put(
       const existingExchange = await prisma.exchange.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
           ],
         },
@@ -359,7 +361,7 @@ router.post(
       const exchange = await prisma.exchange.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
           ],
         },
@@ -379,7 +381,7 @@ router.post(
       const updatedExchange = await prisma.exchange.update({
         where: { id: exchange.id },
         data: {
-          status: 'APPROVED',
+          status: 'PROCESSING',
           updatedBy: req.user!.id,
         },
         include: { items: true },
@@ -390,7 +392,7 @@ router.post(
         exchange.returnRequestId,
         'exchange_approved',
         'PENDING',
-        'APPROVED',
+        'PROCESSING',
         null,
         req.user!.id,
         'ADMIN'
@@ -420,7 +422,7 @@ router.post(
       const exchange = await prisma.exchange.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
           ],
         },
@@ -432,7 +434,7 @@ router.post(
         return;
       }
 
-      if (!['APPROVED', 'PROCESSING', 'SHIPPED'].includes(exchange.status)) {
+      if (!['PROCESSING', 'SHIPPED'].includes(exchange.status)) {
         res.status(400).json({ error: 'Exchange is not in completable status' });
         return;
       }
@@ -492,7 +494,7 @@ router.post(
       const exchange = await prisma.exchange.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
           ],
         },
@@ -565,7 +567,7 @@ router.post(
       const exchange = await prisma.exchange.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
           ],
         },
@@ -576,8 +578,8 @@ router.post(
         return;
       }
 
-      if (exchange.status !== 'APPROVED') {
-        res.status(400).json({ error: 'Can only process approved exchanges' });
+      if (exchange.status !== 'PENDING') {
+        res.status(400).json({ error: 'Can only process pending exchanges' });
         return;
       }
 
@@ -594,7 +596,7 @@ router.post(
       await addReturnHistory(
         exchange.returnRequestId,
         'exchange_processing',
-        'APPROVED',
+        'PENDING',
         'PROCESSING',
         null,
         req.user!.id,
@@ -625,7 +627,7 @@ router.post(
       const exchange = await prisma.exchange.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
           ],
         },
@@ -636,7 +638,7 @@ router.post(
         return;
       }
 
-      if (!['APPROVED', 'PROCESSING'].includes(exchange.status)) {
+      if (!['PENDING', 'PROCESSING'].includes(exchange.status)) {
         res.status(400).json({ error: 'Exchange is not ready to ship' });
         return;
       }

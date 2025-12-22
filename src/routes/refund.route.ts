@@ -1,6 +1,8 @@
 import { Router, type Response } from 'express';
-import { prisma } from '@innovabound-ecomm-platform/returns-db';
+import { getReturnsPrisma } from '../lib/db';
 import { requireAuth, requirePermission, type AuthenticatedRequest } from '../middleware/auth';
+
+const prisma = getReturnsPrisma();
 import {
   CreateRefundSchema,
   ProcessRefundSchema,
@@ -121,7 +123,7 @@ router.get(
       const refund = await prisma.refund.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
           ],
         },
@@ -172,7 +174,7 @@ router.post(
       const existingReturn = await prisma.returnRequest.findFirst({
         where: {
           OR: [
-            { id: parseInt(returnId) || 0 },
+            { id: parseInt(returnId as string) || 0 },
             { uuid: returnId },
             { rmaNumber: returnId },
           ],
@@ -185,7 +187,7 @@ router.post(
       }
 
       // Verify return is in appropriate status
-      if (!['INSPECTED', 'PROCESSING_REFUND'].includes(existingReturn.status)) {
+      if (!['INSPECTION_PASSED', 'PROCESSING_REFUND'].includes(existingReturn.status)) {
         res.status(400).json({ error: 'Return must be inspected before refund' });
         return;
       }
@@ -200,7 +202,7 @@ router.post(
       });
 
       const refundedAmount = existingRefunds._sum.amount || 0;
-      const remainingAmount = existingReturn.total - refundedAmount;
+      const remainingAmount = (existingReturn.totalRefundAmount || 0) - refundedAmount;
 
       if (data.amount > remainingAmount) {
         res.status(400).json({
@@ -286,7 +288,7 @@ router.post(
       const refund = await prisma.refund.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
           ],
         },
@@ -429,7 +431,7 @@ router.post(
       const refund = await prisma.refund.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
           ],
         },
@@ -448,7 +450,7 @@ router.post(
       const updatedRefund = await prisma.refund.update({
         where: { id: refund.id },
         data: {
-          status: 'CANCELLED',
+          status: 'FAILED',
           failureReason: reason,
           updatedBy: req.user!.id,
         },
@@ -459,7 +461,7 @@ router.post(
         refund.returnRequestId,
         'refund_cancelled',
         refund.status,
-        'CANCELLED',
+        'FAILED',
         reason || null,
         req.user!.id,
         'ADMIN'
@@ -488,7 +490,7 @@ router.post(
       const refund = await prisma.refund.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
           ],
         },
@@ -546,7 +548,7 @@ router.get(
       const existingReturn = await prisma.returnRequest.findFirst({
         where: {
           OR: [
-            { id: parseInt(returnId) || 0 },
+            { id: parseInt(returnId as string) || 0 },
             { uuid: returnId },
             { rmaNumber: returnId },
           ],
@@ -573,8 +575,8 @@ router.get(
       });
 
       const summary = {
-        returnTotal: existingReturn.total,
-        refunds: refunds.map((r) => ({
+        returnTotal: existingReturn.totalRefundAmount,
+        refunds: refunds.map((r: { uuid: string; amount: number; currency: string; refundType: string; status: string; refundTo: { type: string } | null; createdAt: Date; processedAt: Date | null }) => ({
           id: r.uuid,
           amount: r.amount,
           currency: r.currency,
@@ -585,14 +587,14 @@ router.get(
           processedAt: r.processedAt,
         })),
         totalRefunded: refunds
-          .filter((r) => r.status === 'COMPLETED')
-          .reduce((sum, r) => sum + r.amount, 0),
+          .filter((r: { status: string }) => r.status === 'COMPLETED')
+          .reduce((sum: number, r: { amount: number }) => sum + r.amount, 0),
         totalPending: refunds
-          .filter((r) => ['PENDING', 'PROCESSING'].includes(r.status))
-          .reduce((sum, r) => sum + r.amount, 0),
-        remainingRefundable: existingReturn.total - refunds
-          .filter((r) => ['PENDING', 'PROCESSING', 'COMPLETED'].includes(r.status))
-          .reduce((sum, r) => sum + r.amount, 0),
+          .filter((r: { status: string }) => ['PENDING', 'PROCESSING'].includes(r.status))
+          .reduce((sum: number, r: { amount: number }) => sum + r.amount, 0),
+        remainingRefundable: (existingReturn.totalRefundAmount || 0) - refunds
+          .filter((r: { status: string }) => ['PENDING', 'PROCESSING', 'COMPLETED'].includes(r.status))
+          .reduce((sum: number, r: { amount: number }) => sum + r.amount, 0),
       };
 
       res.json(summary);

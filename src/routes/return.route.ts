@@ -1,6 +1,8 @@
 import { Router, type Response } from 'express';
-import { prisma } from '@innovabound-ecomm-platform/returns-db';
+import { getReturnsPrisma } from '../lib/db';
 import { requireAuth, requirePermission, type AuthenticatedRequest } from '../middleware/auth';
+
+const prisma = getReturnsPrisma();
 import {
   CreateReturnRequestSchema,
   UpdateReturnRequestSchema,
@@ -92,7 +94,7 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =>
         where,
         include: {
           items: true,
-          label: true,
+          returnLabel: true,
           _count: {
             select: { refunds: true },
           },
@@ -130,7 +132,7 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
     const returnRequest = await prisma.returnRequest.findFirst({
       where: {
         OR: [
-          { id: parseInt(id) || 0 },
+          { id: parseInt(id as string) || 0 },
           { uuid: id },
           { rmaNumber: id },
         ],
@@ -141,7 +143,7 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
             disposition: true,
           },
         },
-        label: true,
+        returnLabel: true,
         inspection: true,
         refunds: {
           include: {
@@ -158,7 +160,6 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
           orderBy: { occurredAt: 'desc' },
           take: 50,
         },
-        policy: true,
       },
     });
 
@@ -209,16 +210,12 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =
         rmaNumber: generateRmaNumber(),
         orderId: data.orderId,
         userId,
-        policyId: policy?.id,
         status: 'PENDING',
-        reason: data.reason,
-        reasonDetails: data.reasonDetails,
         requestedResolution: data.requestedResolution,
         customerNotes: data.customerNotes,
         subtotal,
-        shippingCost: 0,
         restockingFee: 0,
-        total: subtotal,
+        totalRefundAmount: subtotal,
         createdBy: req.user!.id,
         updatedBy: req.user!.id,
         items: {
@@ -228,8 +225,8 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =
             productName: item.productName,
             variantName: item.variantName,
             sku: item.sku,
-            quantity: item.quantity,
-            quantityReceived: 0,
+            quantityOrdered: item.quantity,
+            quantityReturning: item.quantity,
             unitPrice: item.unitPrice,
             totalValue: item.unitPrice * item.quantity,
             reason: item.reason,
@@ -242,7 +239,6 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =
       },
       include: {
         items: true,
-        policy: true,
       },
     });
 
@@ -283,7 +279,7 @@ router.put('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
     const existingReturn = await prisma.returnRequest.findFirst({
       where: {
         OR: [
-          { id: parseInt(id) || 0 },
+          { id: parseInt(id as string) || 0 },
           { uuid: id },
           { rmaNumber: id },
         ],
@@ -316,7 +312,7 @@ router.put('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
       },
       include: {
         items: true,
-        label: true,
+        returnLabel: true,
       },
     });
 
@@ -350,12 +346,11 @@ router.post(
       const existingReturn = await prisma.returnRequest.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
             { rmaNumber: id },
           ],
         },
-        include: { policy: true },
       });
 
       if (!existingReturn) {
@@ -369,26 +364,23 @@ router.post(
       }
 
       // Calculate restocking fee if applicable
-      let restockingFee = 0;
-      if (existingReturn.policy?.restockingFeePercent) {
-        restockingFee = Math.round(existingReturn.subtotal * (existingReturn.policy.restockingFeePercent / 100));
-      }
+      const restockingFee = 0;
 
       const returnRequest = await prisma.returnRequest.update({
         where: { id: existingReturn.id },
         data: {
           status: 'APPROVED',
-          approvedResolution: data.resolution,
+          actualResolution: data.resolution,
           adminNotes: data.adminNotes,
           restockingFee,
-          total: existingReturn.subtotal - restockingFee,
+          totalRefundAmount: existingReturn.subtotal - restockingFee,
           approvedAt: new Date(),
-          approvedBy: req.user!.id,
+          processedBy: req.user!.id,
           updatedBy: req.user!.id,
         },
         include: {
           items: true,
-          label: true,
+          returnLabel: true,
         },
       });
 
@@ -434,7 +426,7 @@ router.post(
       const existingReturn = await prisma.returnRequest.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
             { rmaNumber: id },
           ],
@@ -455,10 +447,9 @@ router.post(
         where: { id: existingReturn.id },
         data: {
           status: 'REJECTED',
-          rejectionReason: data.reason,
-          adminNotes: data.adminNotes,
+          adminNotes: data.adminNotes || data.reason,
           rejectedAt: new Date(),
-          rejectedBy: req.user!.id,
+          processedBy: req.user!.id,
           updatedBy: req.user!.id,
         },
       });
@@ -505,7 +496,7 @@ router.post(
       const existingReturn = await prisma.returnRequest.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
             { rmaNumber: id },
           ],
@@ -518,7 +509,7 @@ router.post(
         return;
       }
 
-      if (!['APPROVED', 'LABEL_GENERATED', 'SHIPPED'].includes(existingReturn.status)) {
+      if (!['APPROVED', 'SHIPPED'].includes(existingReturn.status)) {
         res.status(400).json({ error: 'Return is not in a receivable status' });
         return;
       }
@@ -529,21 +520,11 @@ router.post(
           await prisma.returnItem.update({
             where: { id: itemData.itemId },
             data: {
-              quantityReceived: itemData.quantityReceived,
               condition: itemData.condition,
               updatedBy: req.user!.id,
             },
           });
         }
-      } else {
-        // Default: mark all items as fully received
-        await prisma.returnItem.updateMany({
-          where: { returnRequestId: existingReturn.id },
-          data: {
-            quantityReceived: undefined, // Will need to set individually
-            updatedBy: req.user!.id,
-          },
-        });
       }
 
       const returnRequest = await prisma.returnRequest.update({
@@ -551,12 +532,11 @@ router.post(
         data: {
           status: 'RECEIVED',
           receivedAt: new Date(),
-          receivedBy: data.receivedBy || req.user!.id,
           updatedBy: req.user!.id,
         },
         include: {
           items: true,
-          label: true,
+          returnLabel: true,
         },
       });
 
@@ -591,7 +571,7 @@ router.post('/:id/cancel', requireAuth, async (req: AuthenticatedRequest, res: R
     const existingReturn = await prisma.returnRequest.findFirst({
       where: {
         OR: [
-          { id: parseInt(id) || 0 },
+          { id: parseInt(id as string) || 0 },
           { uuid: id },
           { rmaNumber: id },
         ],
@@ -611,7 +591,7 @@ router.post('/:id/cancel', requireAuth, async (req: AuthenticatedRequest, res: R
     }
 
     // Can only cancel in certain statuses
-    if (!['PENDING', 'APPROVED', 'LABEL_GENERATED'].includes(existingReturn.status)) {
+    if (!['PENDING', 'APPROVED'].includes(existingReturn.status)) {
       res.status(400).json({ error: 'Cannot cancel return in current status' });
       return;
     }
@@ -620,8 +600,6 @@ router.post('/:id/cancel', requireAuth, async (req: AuthenticatedRequest, res: R
       where: { id: existingReturn.id },
       data: {
         status: 'CANCELLED',
-        cancelledAt: new Date(),
-        cancelledBy: req.user!.id,
         updatedBy: req.user!.id,
       },
     });
@@ -655,7 +633,7 @@ router.get('/:id/history', requireAuth, async (req: AuthenticatedRequest, res: R
     const existingReturn = await prisma.returnRequest.findFirst({
       where: {
         OR: [
-          { id: parseInt(id) || 0 },
+          { id: parseInt(id as string) || 0 },
           { uuid: id },
           { rmaNumber: id },
         ],
@@ -700,7 +678,7 @@ router.get('/:id/items', requireAuth, async (req: AuthenticatedRequest, res: Res
     const existingReturn = await prisma.returnRequest.findFirst({
       where: {
         OR: [
-          { id: parseInt(id) || 0 },
+          { id: parseInt(id as string) || 0 },
           { uuid: id },
           { rmaNumber: id },
         ],
@@ -755,7 +733,7 @@ router.post('/:id/items', requireAuth, async (req: AuthenticatedRequest, res: Re
     const existingReturn = await prisma.returnRequest.findFirst({
       where: {
         OR: [
-          { id: parseInt(id) || 0 },
+          { id: parseInt(id as string) || 0 },
           { uuid: id },
           { rmaNumber: id },
         ],
@@ -788,8 +766,8 @@ router.post('/:id/items', requireAuth, async (req: AuthenticatedRequest, res: Re
         productName: data.productName,
         variantName: data.variantName,
         sku: data.sku,
-        quantity: data.quantity,
-        quantityReceived: 0,
+        quantityOrdered: data.quantity,
+        quantityReturning: data.quantity,
         unitPrice: data.unitPrice,
         totalValue: data.unitPrice * data.quantity,
         reason: data.reason,
@@ -805,7 +783,7 @@ router.post('/:id/items', requireAuth, async (req: AuthenticatedRequest, res: Re
       where: { id: existingReturn.id },
       data: {
         subtotal: existingReturn.subtotal + item.totalValue,
-        total: existingReturn.total + item.totalValue,
+        totalRefundAmount: (existingReturn.totalRefundAmount || 0) + item.totalValue,
         updatedBy: req.user!.id,
       },
     });
@@ -836,7 +814,7 @@ router.put('/:returnId/items/:itemId', requireAuth, async (req: AuthenticatedReq
     const existingReturn = await prisma.returnRequest.findFirst({
       where: {
         OR: [
-          { id: parseInt(returnId) || 0 },
+          { id: parseInt(returnId as string) || 0 },
           { uuid: returnId },
           { rmaNumber: returnId },
         ],
@@ -857,7 +835,7 @@ router.put('/:returnId/items/:itemId', requireAuth, async (req: AuthenticatedReq
 
     const existingItem = await prisma.returnItem.findFirst({
       where: {
-        id: parseInt(itemId),
+        id: parseInt(itemId as string),
         returnRequestId: existingReturn.id,
       },
     });
@@ -871,7 +849,7 @@ router.put('/:returnId/items/:itemId', requireAuth, async (req: AuthenticatedReq
       where: { id: existingItem.id },
       data: {
         ...data,
-        totalValue: data.quantity ? data.quantity * existingItem.unitPrice : undefined,
+        totalValue: data.quantityReturning ? data.quantityReturning * existingItem.unitPrice : undefined,
         updatedBy: req.user!.id,
       },
     });
@@ -894,7 +872,7 @@ router.delete('/:returnId/items/:itemId', requireAuth, async (req: Authenticated
     const existingReturn = await prisma.returnRequest.findFirst({
       where: {
         OR: [
-          { id: parseInt(returnId) || 0 },
+          { id: parseInt(returnId as string) || 0 },
           { uuid: returnId },
           { rmaNumber: returnId },
         ],
@@ -921,7 +899,7 @@ router.delete('/:returnId/items/:itemId', requireAuth, async (req: Authenticated
 
     const existingItem = await prisma.returnItem.findFirst({
       where: {
-        id: parseInt(itemId),
+        id: parseInt(itemId as string),
         returnRequestId: existingReturn.id,
       },
     });
@@ -950,7 +928,7 @@ router.delete('/:returnId/items/:itemId', requireAuth, async (req: Authenticated
       where: { id: existingReturn.id },
       data: {
         subtotal: existingReturn.subtotal - existingItem.totalValue,
-        total: existingReturn.total - existingItem.totalValue,
+        totalRefundAmount: (existingReturn.totalRefundAmount || 0) - existingItem.totalValue,
         updatedBy: req.user!.id,
       },
     });
@@ -985,7 +963,7 @@ router.post(
       const existingReturn = await prisma.returnRequest.findFirst({
         where: {
           OR: [
-            { id: parseInt(returnId) || 0 },
+            { id: parseInt(returnId as string) || 0 },
             { uuid: returnId },
             { rmaNumber: returnId },
           ],
@@ -999,7 +977,7 @@ router.post(
 
       const existingItem = await prisma.returnItem.findFirst({
         where: {
-          id: parseInt(itemId),
+          id: parseInt(itemId as string),
           returnRequestId: existingReturn.id,
         },
       });
@@ -1066,12 +1044,12 @@ router.post(
       const existingReturn = await prisma.returnRequest.findFirst({
         where: {
           OR: [
-            { id: parseInt(id) || 0 },
+            { id: parseInt(id as string) || 0 },
             { uuid: id },
             { rmaNumber: id },
           ],
         },
-        include: { label: true },
+        include: { returnLabel: true },
       });
 
       if (!existingReturn) {
@@ -1084,7 +1062,7 @@ router.post(
         return;
       }
 
-      if (existingReturn.label) {
+      if (existingReturn.returnLabel) {
         res.status(400).json({ error: 'Return already has a label' });
         return;
       }
@@ -1108,7 +1086,7 @@ router.post(
       await prisma.returnRequest.update({
         where: { id: existingReturn.id },
         data: {
-          status: 'LABEL_GENERATED',
+          status: 'APPROVED',
           updatedBy: req.user!.id,
         },
       });
@@ -1143,12 +1121,12 @@ router.get('/:id/label', requireAuth, async (req: AuthenticatedRequest, res: Res
     const existingReturn = await prisma.returnRequest.findFirst({
       where: {
         OR: [
-          { id: parseInt(id) || 0 },
+          { id: parseInt(id as string) || 0 },
           { uuid: id },
           { rmaNumber: id },
         ],
       },
-      include: { label: true },
+      include: { returnLabel: true },
     });
 
     if (!existingReturn) {
@@ -1163,12 +1141,12 @@ router.get('/:id/label', requireAuth, async (req: AuthenticatedRequest, res: Res
       return;
     }
 
-    if (!existingReturn.label) {
+    if (!existingReturn.returnLabel) {
       res.status(404).json({ error: 'No return label found' });
       return;
     }
 
-    res.json(existingReturn.label);
+    res.json(existingReturn.returnLabel);
   } catch (error) {
     console.error('Error getting return label:', error);
     res.status(500).json({ error: 'Failed to get return label' });
@@ -1194,12 +1172,12 @@ router.post('/:id/ship', requireAuth, async (req: AuthenticatedRequest, res: Res
     const existingReturn = await prisma.returnRequest.findFirst({
       where: {
         OR: [
-          { id: parseInt(id) || 0 },
+          { id: parseInt(id as string) || 0 },
           { uuid: id },
           { rmaNumber: id },
         ],
       },
-      include: { label: true },
+      include: { returnLabel: true },
     });
 
     if (!existingReturn) {
@@ -1214,19 +1192,19 @@ router.post('/:id/ship', requireAuth, async (req: AuthenticatedRequest, res: Res
       return;
     }
 
-    if (!['APPROVED', 'LABEL_GENERATED'].includes(existingReturn.status)) {
+    if (!['APPROVED'].includes(existingReturn.status)) {
       res.status(400).json({ error: 'Return is not in a shippable status' });
       return;
     }
 
     // Update label with tracking info
-    if (existingReturn.label) {
+    if (existingReturn.returnLabel) {
       await prisma.returnLabel.update({
-        where: { id: existingReturn.label.id },
+        where: { id: existingReturn.returnLabel.id },
         data: {
           trackingNumber: data.trackingNumber,
           trackingUrl: data.trackingUrl,
-          carrier: data.carrier || existingReturn.label.carrier,
+          carrier: data.carrier || existingReturn.returnLabel.carrier,
           shipped: true,
           shippedAt: new Date(),
           updatedBy: req.user!.id,
@@ -1253,12 +1231,11 @@ router.post('/:id/ship', requireAuth, async (req: AuthenticatedRequest, res: Res
       where: { id: existingReturn.id },
       data: {
         status: 'SHIPPED',
-        shippedAt: new Date(),
         updatedBy: req.user!.id,
       },
       include: {
         items: true,
-        label: true,
+        returnLabel: true,
       },
     });
 
