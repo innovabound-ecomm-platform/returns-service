@@ -85,7 +85,7 @@ Alternative paths:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PORT` | Service port | `3010` |
+| `PORT` | Service port | `3008` |
 | `DATABASE_URL` | PostgreSQL connection string | - |
 | `KAFKA_BROKERS` | Kafka broker addresses | - |
 | `AUTH_SERVICE_URL` | Auth service URL | - |

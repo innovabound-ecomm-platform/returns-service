@@ -9,10 +9,13 @@ import refundRoutes from './routes/refund.route';
 import exchangeRoutes from './routes/exchange.route';
 
 const app = express();
-const PORT = process.env.PORT || 3010;
+const PORT = process.env.PORT || 3008;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ["http://localhost:3000", "http://localhost:3002", "http://localhost:3003", "http://localhost:3100"],
+  credentials: true,
+}));
 app.use(express.json());
 app.use(cookieParser());
 
