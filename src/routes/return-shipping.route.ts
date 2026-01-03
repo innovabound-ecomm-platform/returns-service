@@ -15,6 +15,35 @@ const router: Router = Router();
 // GET RETURN HISTORY
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{id}/history:
+ *   get:
+ *     summary: Get return history
+ *     description: Retrieve the complete history of status changes and actions for a return request
+ *     tags:
+ *       - Returns
+ *       - Return History
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     responses:
+ *       200:
+ *         description: Return history entries
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Return request not found
+ */
 router.get('/:id/history', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -54,6 +83,55 @@ router.get('/:id/history', requireAuth, async (req: AuthenticatedRequest, res: R
 // GENERATE RETURN LABEL (Admin only)
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{id}/label:
+ *   post:
+ *     summary: Generate return label
+ *     description: Admin endpoint to generate a prepaid return shipping label for an approved return
+ *     tags:
+ *       - Return Shipping
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - carrier
+ *               - paidBy
+ *             properties:
+ *               carrier:
+ *                 type: string
+ *                 enum: [UPS, FEDEX, USPS, DHL]
+ *               paidBy:
+ *                 type: string
+ *                 enum: [MERCHANT, CUSTOMER]
+ *               expiresInDays:
+ *                 type: integer
+ *                 default: 30
+ *     responses:
+ *       201:
+ *         description: Return label generated successfully
+ *       400:
+ *         description: Return must be approved or already has a label
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       404:
+ *         description: Return request not found
+ */
 router.post(
   '/:id/label',
   requireAuth,
@@ -137,6 +215,34 @@ router.post(
 // GET RETURN LABEL
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{id}/label:
+ *   get:
+ *     summary: Get return label
+ *     description: Retrieve the shipping label for a return request
+ *     tags:
+ *       - Return Shipping
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     responses:
+ *       200:
+ *         description: Return label details including tracking info
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Return request or label not found
+ */
 router.get('/:id/label', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -174,6 +280,52 @@ router.get('/:id/label', requireAuth, async (req: AuthenticatedRequest, res: Res
 // MARK AS SHIPPED
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{id}/ship:
+ *   post:
+ *     summary: Mark return as shipped
+ *     description: Mark a return as shipped and provide tracking information
+ *     tags:
+ *       - Return Shipping
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - trackingNumber
+ *             properties:
+ *               trackingNumber:
+ *                 type: string
+ *               trackingUrl:
+ *                 type: string
+ *               carrier:
+ *                 type: string
+ *                 enum: [UPS, FEDEX, USPS, DHL]
+ *     responses:
+ *       200:
+ *         description: Return marked as shipped successfully
+ *       400:
+ *         description: Return is not in a shippable status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Return request not found
+ */
 router.post('/:id/ship', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;

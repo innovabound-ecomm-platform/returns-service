@@ -19,6 +19,50 @@ const router: Router = Router();
 // APPROVE RETURN (Admin only)
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{id}/approve:
+ *   post:
+ *     summary: Approve return request
+ *     description: Admin endpoint to approve a pending return request and set the resolution type
+ *     tags:
+ *       - Return Status
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - resolution
+ *             properties:
+ *               resolution:
+ *                 type: string
+ *                 enum: [REFUND, EXCHANGE, STORE_CREDIT]
+ *               adminNotes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Return approved successfully
+ *       400:
+ *         description: Validation error or can only approve pending returns
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       404:
+ *         description: Return request not found
+ */
 router.post(
   '/:id/approve',
   requireAuth,
@@ -93,6 +137,49 @@ router.post(
 // REJECT RETURN (Admin only)
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{id}/reject:
+ *   post:
+ *     summary: Reject return request
+ *     description: Admin endpoint to reject a pending return request with a reason
+ *     tags:
+ *       - Return Status
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reason
+ *             properties:
+ *               reason:
+ *                 type: string
+ *               adminNotes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Return rejected successfully
+ *       400:
+ *         description: Validation error or can only reject pending returns
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       404:
+ *         description: Return request not found
+ */
 router.post(
   '/:id/reject',
   requireAuth,
@@ -157,6 +244,57 @@ router.post(
 // RECEIVE RETURN (Admin only)
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{id}/receive:
+ *   post:
+ *     summary: Mark return as received
+ *     description: Admin/warehouse endpoint to mark a return as received at warehouse with item conditions
+ *     tags:
+ *       - Return Status
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes:
+ *                 type: string
+ *               itemsReceived:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - itemId
+ *                     - condition
+ *                   properties:
+ *                     itemId:
+ *                       type: integer
+ *                     condition:
+ *                       type: string
+ *                       enum: [NEW, LIKE_NEW, GOOD, ACCEPTABLE, DAMAGED]
+ *     responses:
+ *       200:
+ *         description: Return marked as received
+ *       400:
+ *         description: Return not in receivable status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin/warehouse access required
+ *       404:
+ *         description: Return request not found
+ */
 router.post(
   '/:id/receive',
   requireAuth,
@@ -237,6 +375,44 @@ router.post(
 // CANCEL RETURN
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{id}/cancel:
+ *   post:
+ *     summary: Cancel return request
+ *     description: Cancel a return request. Users can cancel their own returns, admins can cancel any return.
+ *     tags:
+ *       - Return Status
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Return cancelled successfully
+ *       400:
+ *         description: Cannot cancel return in current status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Return request not found
+ */
 router.post('/:id/cancel', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;

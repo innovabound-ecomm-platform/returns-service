@@ -1,3 +1,3 @@
-import baseConfig from "@innovabound-ecomm-platform/eslint-config/base.js";
+import { config as baseConfig } from "@innovabound-ecomm-platform/eslint-config/base";
 
 export default [...baseConfig];

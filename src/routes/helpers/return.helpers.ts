@@ -56,6 +56,7 @@ export function buildReturnLookupWhere(id: string | undefined) {
 /**
  * Check if user has admin or returns management permissions.
  */
-export function isReturnAdmin(roles: string[]): boolean {
+export function isReturnAdmin(roles: string[] | undefined): boolean {
+  if (!roles) return false;
   return roles.includes('admin') || roles.includes('returns:manage');
 }

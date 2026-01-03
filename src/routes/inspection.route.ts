@@ -41,6 +41,72 @@ async function addReturnHistory(
 // SUBMIT INSPECTION (Admin/Warehouse only)
 // ===========================================
 
+/**
+ * @openapi
+ * /inspection/{id}/inspection:
+ *   post:
+ *     summary: Submit return inspection
+ *     description: Admin/warehouse endpoint to submit inspection results for a received return including item conditions and overall pass/fail status
+ *     tags:
+ *       - Inspection
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - overallResult
+ *             properties:
+ *               overallResult:
+ *                 type: string
+ *                 enum: [PASS, FAIL, PARTIAL]
+ *               notes:
+ *                 type: string
+ *               photos:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               itemResults:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - itemId
+ *                     - result
+ *                   properties:
+ *                     itemId:
+ *                       type: integer
+ *                     result:
+ *                       type: string
+ *                       enum: [PASS, FAIL, PARTIAL]
+ *                     condition:
+ *                       type: string
+ *                       enum: [NEW, LIKE_NEW, GOOD, ACCEPTABLE, DAMAGED]
+ *                     notes:
+ *                       type: string
+ *     responses:
+ *       201:
+ *         description: Inspection submitted successfully, return status updated to INSPECTION_PASSED or INSPECTION_FAILED
+ *       400:
+ *         description: Validation error, return must be RECEIVED or INSPECTING, or already has inspection
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin or warehouse access required
+ *       404:
+ *         description: Return request not found
+ */
 router.post(
   '/:id/inspection',
   requireAuth,
@@ -157,6 +223,34 @@ router.post(
 // GET INSPECTION
 // ===========================================
 
+/**
+ * @openapi
+ * /inspection/{id}/inspection:
+ *   get:
+ *     summary: Get inspection details
+ *     description: Admin/warehouse endpoint to retrieve detailed inspection results for a return including item-level results
+ *     tags:
+ *       - Inspection
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     responses:
+ *       200:
+ *         description: Inspection details with item results
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin or warehouse access required
+ *       404:
+ *         description: Return request or inspection not found
+ */
 router.get(
   '/:id/inspection',
   requireAuth,
@@ -220,6 +314,36 @@ router.get(
 // START INSPECTION (Admin/Warehouse only)
 // ===========================================
 
+/**
+ * @openapi
+ * /inspection/{id}/inspection/start:
+ *   post:
+ *     summary: Start inspection process
+ *     description: Admin/warehouse endpoint to mark a received return as inspecting and begin the inspection workflow
+ *     tags:
+ *       - Inspection
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     responses:
+ *       200:
+ *         description: Inspection started, return status updated to INSPECTING
+ *       400:
+ *         description: Return must be in RECEIVED status to start inspection
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin or warehouse access required
+ *       404:
+ *         description: Return request not found
+ */
 router.post(
   '/:id/inspection/start',
   requireAuth,
@@ -279,6 +403,36 @@ router.post(
 // INSPECTION QUEUE (Admin/Warehouse only)
 // ===========================================
 
+/**
+ * @openapi
+ * /inspection/queue:
+ *   get:
+ *     summary: Get inspection queue
+ *     description: Admin/warehouse endpoint to retrieve returns awaiting inspection (RECEIVED or INSPECTING status) sorted by priority
+ *     tags:
+ *       - Inspection
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: List of returns awaiting inspection with pagination
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin or warehouse access required
+ */
 router.get(
   '/queue',
   requireAuth,

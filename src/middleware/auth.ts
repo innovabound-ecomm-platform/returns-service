@@ -135,9 +135,9 @@ export const requireAuth = async (
 };
 
 /**
- * Middleware to check if user has required permission
+ * Middleware to check if user has any of the required permissions
  */
-export const requirePermission = (permission: string) => {
+export const requirePermission = (...allowedPermissions: string[]) => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const userRoles = req.user?.roles || [];
     const userPermissions = req.user?.permissions || [];
@@ -147,18 +147,23 @@ export const requirePermission = (permission: string) => {
       return next();
     }
 
-    // Check explicit permission
-    if (userPermissions.includes(permission)) {
+    // Check if user has any of the allowed permissions
+    const hasExplicitPermission = allowedPermissions.some(permission =>
+      userPermissions.includes(permission)
+    );
+    if (hasExplicitPermission) {
       return next();
     }
 
     // Check role-based permission (legacy format)
-    const hasPermission = userRoles.some(role =>
-      role === permission || role.startsWith(`${permission.split(":")[0]}:`)
+    const hasRolePermission = allowedPermissions.some(permission =>
+      userRoles.some(role =>
+        role === permission || role.startsWith(`${permission.split(":")[0]}:`)
+      )
     );
 
-    if (!hasPermission) {
-      return res.status(403).json({ error: "Insufficient permissions", required: permission });
+    if (!hasRolePermission) {
+      return res.status(403).json({ error: "Insufficient permissions", required: allowedPermissions });
     }
 
     next();

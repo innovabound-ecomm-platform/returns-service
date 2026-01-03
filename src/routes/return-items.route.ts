@@ -19,6 +19,34 @@ const router: Router = Router();
 // RETURN ITEMS - LIST
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{id}/items:
+ *   get:
+ *     summary: List return items
+ *     description: Get all items in a return request with disposition details
+ *     tags:
+ *       - Return Items
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     responses:
+ *       200:
+ *         description: List of return items
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Return request not found
+ */
 router.get('/:id/items', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -60,6 +88,72 @@ router.get('/:id/items', requireAuth, async (req: AuthenticatedRequest, res: Res
 // RETURN ITEMS - ADD
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{id}/items:
+ *   post:
+ *     summary: Add item to return
+ *     description: Add a new item to an existing return request (PENDING status only)
+ *     tags:
+ *       - Return Items
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - productId
+ *               - productName
+ *               - sku
+ *               - quantity
+ *               - unitPrice
+ *               - reason
+ *             properties:
+ *               productId:
+ *                 type: string
+ *               variantId:
+ *                 type: string
+ *               productName:
+ *                 type: string
+ *               variantName:
+ *                 type: string
+ *               sku:
+ *                 type: string
+ *               quantity:
+ *                 type: integer
+ *               unitPrice:
+ *                 type: number
+ *               reason:
+ *                 type: string
+ *               reasonDetails:
+ *                 type: string
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       201:
+ *         description: Item added to return
+ *       400:
+ *         description: Validation error or cannot add items in current status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Return request not found
+ */
 router.post('/:id/items', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -135,6 +229,59 @@ router.post('/:id/items', requireAuth, async (req: AuthenticatedRequest, res: Re
 // RETURN ITEMS - UPDATE
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{returnId}/items/{itemId}:
+ *   put:
+ *     summary: Update return item
+ *     description: Update an item in a return request (quantity, reason, etc.)
+ *     tags:
+ *       - Return Items
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: returnId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               quantityReturning:
+ *                 type: integer
+ *               reason:
+ *                 type: string
+ *               reasonDetails:
+ *                 type: string
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               condition:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Item updated successfully
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Return request or item not found
+ */
 router.put('/:returnId/items/:itemId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { returnId, itemId } = req.params;
@@ -195,6 +342,41 @@ router.put('/:returnId/items/:itemId', requireAuth, async (req: AuthenticatedReq
 // RETURN ITEMS - DELETE
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{returnId}/items/{itemId}:
+ *   delete:
+ *     summary: Remove item from return
+ *     description: Delete an item from a return request (PENDING status only, must have at least 2 items)
+ *     tags:
+ *       - Return Items
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: returnId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Item deleted successfully
+ *       400:
+ *         description: Cannot delete items in current status or cannot remove last item
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Return request or item not found
+ */
 router.delete('/:returnId/items/:itemId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { returnId, itemId } = req.params;
@@ -268,6 +450,62 @@ router.delete('/:returnId/items/:itemId', requireAuth, async (req: Authenticated
 // ITEM DISPOSITION (Admin only)
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{returnId}/items/{itemId}/disposition:
+ *   post:
+ *     summary: Set item disposition
+ *     description: Admin/warehouse endpoint to set disposition for a returned item (restock, scrap, donate, etc.)
+ *     tags:
+ *       - Return Items
+ *       - Restocking
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: returnId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - disposition
+ *             properties:
+ *               disposition:
+ *                 type: string
+ *                 enum: [RESTOCK, RESTOCK_AS_USED, SCRAP, DONATE, RETURN_TO_VENDOR, REPAIR]
+ *               locationId:
+ *                 type: string
+ *               locationName:
+ *                 type: string
+ *               recoveredValue:
+ *                 type: number
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Item disposition set successfully
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin/warehouse access required
+ *       404:
+ *         description: Return request or item not found
+ */
 router.post(
   '/:returnId/items/:itemId/disposition',
   requireAuth,

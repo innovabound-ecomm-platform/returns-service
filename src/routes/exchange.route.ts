@@ -42,6 +42,41 @@ async function addReturnHistory(
 // LIST EXCHANGES
 // ===========================================
 
+/**
+ * @openapi
+ * /exchanges:
+ *   get:
+ *     summary: List exchanges
+ *     description: Admin endpoint to list all exchange requests with pagination
+ *     tags:
+ *       - Exchanges
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [PENDING, PROCESSING, SHIPPED, COMPLETED, CANCELLED]
+ *     responses:
+ *       200:
+ *         description: List of exchanges with pagination
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ */
 router.get(
   '/',
   requireAuth,
@@ -97,6 +132,34 @@ router.get(
 // GET EXCHANGE BY ID
 // ===========================================
 
+/**
+ * @openapi
+ * /exchanges/{id}:
+ *   get:
+ *     summary: Get exchange by ID
+ *     description: Get detailed information about a specific exchange including items and return request
+ *     tags:
+ *       - Exchanges
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Exchange ID or UUID
+ *     responses:
+ *       200:
+ *         description: Exchange details
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Exchange not found
+ */
 router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -129,7 +192,7 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
     }
 
     // Check authorization
-    const isAdmin = req.user!.roles.includes('admin') || req.user!.roles.includes('returns:manage');
+    const isAdmin = req.user?.roles?.includes('admin') || req.user?.roles?.includes('returns:manage');
     if (!isAdmin && exchange.returnRequest.userId !== req.user!.id) {
       res.status(403).json({ error: 'Access denied' });
       return;
@@ -146,6 +209,75 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
 // CREATE EXCHANGE FOR RETURN
 // ===========================================
 
+/**
+ * @openapi
+ * /exchanges/returns/{returnId}/exchange:
+ *   post:
+ *     summary: Create exchange for return
+ *     description: Create an exchange request for a return approved for exchange resolution
+ *     tags:
+ *       - Exchanges
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: returnId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - items
+ *             properties:
+ *               items:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - originalProductId
+ *                     - newProductId
+ *                     - quantity
+ *                     - originalPrice
+ *                     - newPrice
+ *                     - newProductName
+ *                   properties:
+ *                     originalProductId:
+ *                       type: string
+ *                     originalVariantId:
+ *                       type: string
+ *                     newProductId:
+ *                       type: string
+ *                     newVariantId:
+ *                       type: string
+ *                     newProductName:
+ *                       type: string
+ *                     newVariantName:
+ *                       type: string
+ *                     quantity:
+ *                       type: integer
+ *                     originalPrice:
+ *                       type: number
+ *                     newPrice:
+ *                       type: number
+ *     responses:
+ *       201:
+ *         description: Exchange created successfully
+ *       400:
+ *         description: Return not approved for exchange or already has exchange
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Return request not found
+ */
 router.post(
   '/returns/:returnId/exchange',
   requireAuth,
@@ -178,7 +310,7 @@ router.post(
       }
 
       // Check authorization
-      const isAdmin = req.user!.roles.includes('admin') || req.user!.roles.includes('returns:manage');
+      const isAdmin = req.user?.roles?.includes('admin') || req.user?.roles?.includes('returns:manage');
       if (!isAdmin && existingReturn.userId !== req.user!.id) {
         res.status(403).json({ error: 'Access denied' });
         return;
@@ -251,6 +383,46 @@ router.post(
 // UPDATE EXCHANGE
 // ===========================================
 
+/**
+ * @openapi
+ * /exchanges/{id}:
+ *   put:
+ *     summary: Update exchange
+ *     description: Admin endpoint to update exchange items (not allowed for completed/cancelled)
+ *     tags:
+ *       - Exchanges
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Exchange ID or UUID
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               items:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *     responses:
+ *       200:
+ *         description: Exchange updated successfully
+ *       400:
+ *         description: Cannot update completed or cancelled exchange
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       404:
+ *         description: Exchange not found
+ */
 router.put(
   '/:id',
   requireAuth,
@@ -350,6 +522,36 @@ router.put(
 // APPROVE EXCHANGE (Admin only)
 // ===========================================
 
+/**
+ * @openapi
+ * /exchanges/{id}/approve:
+ *   post:
+ *     summary: Approve exchange
+ *     description: Admin endpoint to approve a pending exchange and move to processing
+ *     tags:
+ *       - Exchanges
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Exchange ID or UUID
+ *     responses:
+ *       200:
+ *         description: Exchange approved successfully
+ *       400:
+ *         description: Can only approve pending exchanges
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       404:
+ *         description: Exchange not found
+ */
 router.post(
   '/:id/approve',
   requireAuth,
@@ -410,6 +612,44 @@ router.post(
 // COMPLETE EXCHANGE (Admin only)
 // ===========================================
 
+/**
+ * @openapi
+ * /exchanges/{id}/complete:
+ *   post:
+ *     summary: Complete exchange
+ *     description: Admin endpoint to mark an exchange as completed with new order details
+ *     tags:
+ *       - Exchanges
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Exchange ID or UUID
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               newOrderId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Exchange completed successfully
+ *       400:
+ *         description: Exchange not in completable status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       404:
+ *         description: Exchange not found
+ */
 router.post(
   '/:id/complete',
   requireAuth,
@@ -483,6 +723,44 @@ router.post(
 // CANCEL EXCHANGE
 // ===========================================
 
+/**
+ * @openapi
+ * /exchanges/{id}/cancel:
+ *   post:
+ *     summary: Cancel exchange
+ *     description: Cancel an exchange. Users can only cancel pending exchanges, admins can cancel any status.
+ *     tags:
+ *       - Exchanges
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Exchange ID or UUID
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Exchange cancelled successfully
+ *       400:
+ *         description: Cannot cancel completed or already cancelled exchange
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Exchange not found
+ */
 router.post(
   '/:id/cancel',
   requireAuth,
@@ -507,7 +785,7 @@ router.post(
       }
 
       // Check authorization
-      const isAdmin = req.user!.roles.includes('admin') || req.user!.roles.includes('returns:manage');
+      const isAdmin = req.user?.roles?.includes('admin') || req.user?.roles?.includes('returns:manage');
       if (!isAdmin && exchange.returnRequest.userId !== req.user!.id) {
         res.status(403).json({ error: 'Access denied' });
         return;
@@ -556,6 +834,36 @@ router.post(
 // MARK EXCHANGE AS PROCESSING
 // ===========================================
 
+/**
+ * @openapi
+ * /exchanges/{id}/process:
+ *   post:
+ *     summary: Mark exchange as processing
+ *     description: Admin endpoint to mark a pending exchange as processing
+ *     tags:
+ *       - Exchanges
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Exchange ID or UUID
+ *     responses:
+ *       200:
+ *         description: Exchange processing started
+ *       400:
+ *         description: Can only process pending exchanges
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       404:
+ *         description: Exchange not found
+ */
 router.post(
   '/:id/process',
   requireAuth,
@@ -615,6 +923,44 @@ router.post(
 // MARK EXCHANGE AS SHIPPED
 // ===========================================
 
+/**
+ * @openapi
+ * /exchanges/{id}/ship:
+ *   post:
+ *     summary: Mark exchange as shipped
+ *     description: Admin endpoint to mark an exchange as shipped and provide new order ID
+ *     tags:
+ *       - Exchanges
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Exchange ID or UUID
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               newOrderId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Exchange marked as shipped
+ *       400:
+ *         description: Exchange is not ready to ship
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       404:
+ *         description: Exchange not found
+ */
 router.post(
   '/:id/ship',
   requireAuth,

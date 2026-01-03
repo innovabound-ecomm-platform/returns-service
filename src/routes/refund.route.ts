@@ -43,6 +43,57 @@ async function addReturnHistory(
 // LIST REFUNDS
 // ===========================================
 
+/**
+ * @openapi
+ * /refunds:
+ *   get:
+ *     summary: List refunds
+ *     description: Admin/finance endpoint to list all refunds with filtering and pagination
+ *     tags:
+ *       - Refunds
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [PENDING, PROCESSING, COMPLETED, FAILED]
+ *       - in: query
+ *         name: returnId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: fromDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: toDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: List of refunds with pagination
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin/finance access required
+ */
 router.get(
   '/',
   requireAuth,
@@ -112,6 +163,34 @@ router.get(
 // GET REFUND BY ID
 // ===========================================
 
+/**
+ * @openapi
+ * /refunds/{id}:
+ *   get:
+ *     summary: Get refund by ID
+ *     description: Admin/finance endpoint to get detailed information about a specific refund
+ *     tags:
+ *       - Refunds
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Refund ID or UUID
+ *     responses:
+ *       200:
+ *         description: Refund details including return request and payment reference
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin/finance access required
+ *       404:
+ *         description: Refund not found
+ */
 router.get(
   '/:id',
   requireAuth,
@@ -155,6 +234,61 @@ router.get(
 // CREATE REFUND FOR RETURN
 // ===========================================
 
+/**
+ * @openapi
+ * /refunds/returns/{returnId}/refund:
+ *   post:
+ *     summary: Create refund for return
+ *     description: Admin/finance endpoint to create a refund for an inspected return request
+ *     tags:
+ *       - Refunds
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: returnId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refundType
+ *               - amount
+ *               - currency
+ *               - refundTo
+ *             properties:
+ *               refundType:
+ *                 type: string
+ *                 enum: [FULL, PARTIAL]
+ *               amount:
+ *                 type: number
+ *               currency:
+ *                 type: string
+ *                 default: USD
+ *               reason:
+ *                 type: string
+ *               refundTo:
+ *                 type: string
+ *                 enum: [original_payment, wallet, store_credit, bank_account]
+ *     responses:
+ *       201:
+ *         description: Refund created successfully
+ *       400:
+ *         description: Validation error, return not inspected, or amount exceeds remaining refundable amount
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin/finance access required
+ *       404:
+ *         description: Return request not found
+ */
 router.post(
   '/returns/:returnId/refund',
   requireAuth,
@@ -269,6 +403,48 @@ router.post(
 // PROCESS REFUND (Admin/Finance only)
 // ===========================================
 
+/**
+ * @openapi
+ * /refunds/{id}/process:
+ *   post:
+ *     summary: Process refund
+ *     description: Admin/finance endpoint to process a pending refund through payment provider
+ *     tags:
+ *       - Refunds
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Refund ID or UUID
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               provider:
+ *                 type: string
+ *                 enum: [STRIPE, PAYPAL, MANUAL, WALLET]
+ *               walletId:
+ *                 type: string
+ *                 description: Required if provider is WALLET
+ *     responses:
+ *       200:
+ *         description: Refund processed successfully
+ *       400:
+ *         description: Can only process pending refunds
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin/finance access required
+ *       404:
+ *         description: Refund not found
+ */
 router.post(
   '/:id/process',
   requireAuth,
@@ -419,6 +595,44 @@ router.post(
 // CANCEL REFUND (Admin only)
 // ===========================================
 
+/**
+ * @openapi
+ * /refunds/{id}/cancel:
+ *   post:
+ *     summary: Cancel refund
+ *     description: Admin/finance endpoint to cancel a pending or processing refund
+ *     tags:
+ *       - Refunds
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Refund ID or UUID
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Refund cancelled successfully
+ *       400:
+ *         description: Can only cancel pending or processing refunds
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Finance access required
+ *       404:
+ *         description: Refund not found
+ */
 router.post(
   '/:id/cancel',
   requireAuth,
@@ -479,6 +693,36 @@ router.post(
 // RETRY FAILED REFUND (Admin only)
 // ===========================================
 
+/**
+ * @openapi
+ * /refunds/{id}/retry:
+ *   post:
+ *     summary: Retry failed refund
+ *     description: Admin/finance endpoint to retry a failed refund
+ *     tags:
+ *       - Refunds
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Refund ID or UUID
+ *     responses:
+ *       200:
+ *         description: Refund retry initiated
+ *       400:
+ *         description: Can only retry failed refunds
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Finance access required
+ *       404:
+ *         description: Refund not found
+ */
 router.post(
   '/:id/retry',
   requireAuth,
@@ -538,6 +782,34 @@ router.post(
 // REFUND SUMMARY FOR RETURN
 // ===========================================
 
+/**
+ * @openapi
+ * /refunds/returns/{returnId}/summary:
+ *   get:
+ *     summary: Get refund summary for return
+ *     description: Get a summary of all refunds for a return request including totals
+ *     tags:
+ *       - Refunds
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: returnId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     responses:
+ *       200:
+ *         description: Refund summary with totals and breakdown
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Return request not found
+ */
 router.get(
   '/returns/:returnId/summary',
   requireAuth,
@@ -561,7 +833,7 @@ router.get(
       }
 
       // Check authorization
-      const isAdmin = req.user!.roles.includes('admin') || req.user!.roles.includes('returns:manage');
+      const isAdmin = req.user?.roles?.includes('admin') || req.user?.roles?.includes('returns:manage');
       if (!isAdmin && existingReturn.userId !== req.user!.id) {
         res.status(403).json({ error: 'Access denied' });
         return;

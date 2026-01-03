@@ -14,6 +14,27 @@ const router: Router = Router();
 // LIST RETURN POLICIES
 // ===========================================
 
+/**
+ * @openapi
+ * /policies:
+ *   get:
+ *     summary: List return policies
+ *     description: Retrieve all return policies, optionally filtered by active status. Public endpoint.
+ *     tags:
+ *       - Policies
+ *     parameters:
+ *       - in: query
+ *         name: active
+ *         schema:
+ *           type: string
+ *           enum: [true, false]
+ *         description: Filter by active status
+ *     responses:
+ *       200:
+ *         description: List of return policies
+ *       500:
+ *         description: Server error
+ */
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { active } = req.query;
@@ -45,6 +66,22 @@ router.get('/', async (req: Request, res: Response) => {
 // GET DEFAULT POLICY
 // ===========================================
 
+/**
+ * @openapi
+ * /policies/default:
+ *   get:
+ *     summary: Get default return policy
+ *     description: Retrieve the active default return policy. Public endpoint.
+ *     tags:
+ *       - Policies
+ *     responses:
+ *       200:
+ *         description: Default return policy details
+ *       404:
+ *         description: No default return policy found
+ *       500:
+ *         description: Server error
+ */
 router.get('/default', async (req: Request, res: Response) => {
   try {
     const policy = await prisma.returnPolicy.findFirst({
@@ -70,6 +107,29 @@ router.get('/default', async (req: Request, res: Response) => {
 // GET POLICY BY ID
 // ===========================================
 
+/**
+ * @openapi
+ * /policies/{id}:
+ *   get:
+ *     summary: Get return policy by ID
+ *     description: Retrieve a specific return policy by ID or UUID. Public endpoint.
+ *     tags:
+ *       - Policies
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Policy ID or UUID
+ *     responses:
+ *       200:
+ *         description: Return policy details
+ *       404:
+ *         description: Return policy not found
+ *       500:
+ *         description: Server error
+ */
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -99,6 +159,65 @@ router.get('/:id', async (req: Request, res: Response) => {
 // CREATE POLICY (Admin only)
 // ===========================================
 
+/**
+ * @openapi
+ * /policies:
+ *   post:
+ *     summary: Create return policy
+ *     description: Admin endpoint to create a new return policy with rules and restrictions
+ *     tags:
+ *       - Policies
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - returnWindowDays
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               isDefault:
+ *                 type: boolean
+ *                 default: false
+ *               returnWindowDays:
+ *                 type: integer
+ *               restockingFeePercent:
+ *                 type: number
+ *               requiresReceipt:
+ *                 type: boolean
+ *               requiresOriginalPackaging:
+ *                 type: boolean
+ *               allowedReasons:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               excludedCategories:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               isActive:
+ *                 type: boolean
+ *                 default: true
+ *     responses:
+ *       201:
+ *         description: Return policy created successfully
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Server error
+ */
 router.post(
   '/',
   requireAuth,
@@ -152,6 +271,68 @@ router.post(
 // UPDATE POLICY (Admin only)
 // ===========================================
 
+/**
+ * @openapi
+ * /policies/{id}:
+ *   put:
+ *     summary: Update return policy
+ *     description: Admin endpoint to update an existing return policy
+ *     tags:
+ *       - Policies
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Policy ID or UUID
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               isDefault:
+ *                 type: boolean
+ *               returnWindowDays:
+ *                 type: integer
+ *               restockingFeePercent:
+ *                 type: number
+ *               requiresReceipt:
+ *                 type: boolean
+ *               requiresOriginalPackaging:
+ *                 type: boolean
+ *               allowedReasons:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               excludedCategories:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Return policy updated successfully
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       404:
+ *         description: Return policy not found
+ *       500:
+ *         description: Server error
+ */
 router.put(
   '/:id',
   requireAuth,
@@ -213,6 +394,36 @@ router.put(
 // DELETE POLICY (Admin only)
 // ===========================================
 
+/**
+ * @openapi
+ * /policies/{id}:
+ *   delete:
+ *     summary: Delete return policy
+ *     description: Admin endpoint to delete a return policy. Default policies are deactivated instead of deleted.
+ *     tags:
+ *       - Policies
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Policy ID or UUID
+ *     responses:
+ *       200:
+ *         description: Return policy deleted or deactivated successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access required
+ *       404:
+ *         description: Return policy not found
+ *       500:
+ *         description: Server error
+ */
 router.delete(
   '/:id',
   requireAuth,
@@ -267,6 +478,50 @@ router.delete(
 // CHECK ELIGIBILITY
 // ===========================================
 
+/**
+ * @openapi
+ * /policies/check-eligibility:
+ *   post:
+ *     summary: Check return eligibility
+ *     description: Check if an order is eligible for return based on return policies and time windows
+ *     tags:
+ *       - Policies
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - orderId
+ *               - orderDate
+ *             properties:
+ *               orderId:
+ *                 type: string
+ *               orderDate:
+ *                 type: string
+ *                 format: date-time
+ *               productIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               categoryIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Eligibility check result with policy details and remaining days
+ *       400:
+ *         description: orderId and orderDate are required
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
 router.post('/check-eligibility', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { orderId, orderDate, productIds, categoryIds } = req.body;

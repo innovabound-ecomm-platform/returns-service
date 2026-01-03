@@ -19,6 +19,80 @@ const router: Router = Router();
 // LIST RETURN REQUESTS
 // ===========================================
 
+/**
+ * @openapi
+ * /returns:
+ *   get:
+ *     summary: List return requests
+ *     description: Retrieve a paginated list of return requests. Non-admin users only see their own returns.
+ *     tags:
+ *       - Returns
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [PENDING, APPROVED, REJECTED, SHIPPED, RECEIVED, INSPECTING, INSPECTION_PASSED, INSPECTION_FAILED, PROCESSING_REFUND, COMPLETED, CANCELLED]
+ *       - in: query
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         description: Filter by user ID (admin only)
+ *       - in: query
+ *         name: orderId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: resolution
+ *         schema:
+ *           type: string
+ *           enum: [REFUND, EXCHANGE, STORE_CREDIT]
+ *       - in: query
+ *         name: reason
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: fromDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: toDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           default: createdAt
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *     responses:
+ *       200:
+ *         description: List of return requests with pagination
+ *       401:
+ *         description: Unauthorized
+ *       400:
+ *         description: Validation error
+ */
 router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const validation = ReturnListQuerySchema.safeParse(req.query);
@@ -87,6 +161,34 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =>
 // GET RETURN REQUEST BY ID
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{id}:
+ *   get:
+ *     summary: Get return request by ID
+ *     description: Retrieve detailed information about a specific return request by ID, UUID, or RMA number
+ *     tags:
+ *       - Returns
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     responses:
+ *       200:
+ *         description: Return request details including items, label, inspection, refunds, exchange, and history
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied - not your return
+ *       404:
+ *         description: Return request not found
+ */
 router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -142,6 +244,80 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
 // CREATE RETURN REQUEST
 // ===========================================
 
+/**
+ * @openapi
+ * /returns:
+ *   post:
+ *     summary: Create return request
+ *     description: Create a new return request for an order with items to return
+ *     tags:
+ *       - Returns
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - orderId
+ *               - requestedResolution
+ *               - items
+ *             properties:
+ *               orderId:
+ *                 type: string
+ *               userId:
+ *                 type: string
+ *                 description: Optional - admin can create return for any user
+ *               requestedResolution:
+ *                 type: string
+ *                 enum: [REFUND, EXCHANGE, STORE_CREDIT]
+ *               customerNotes:
+ *                 type: string
+ *               items:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - productId
+ *                     - productName
+ *                     - sku
+ *                     - quantity
+ *                     - unitPrice
+ *                     - reason
+ *                   properties:
+ *                     productId:
+ *                       type: string
+ *                     variantId:
+ *                       type: string
+ *                     productName:
+ *                       type: string
+ *                     variantName:
+ *                       type: string
+ *                     sku:
+ *                       type: string
+ *                     quantity:
+ *                       type: integer
+ *                     unitPrice:
+ *                       type: number
+ *                     reason:
+ *                       type: string
+ *                     reasonDetails:
+ *                       type: string
+ *                     images:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *     responses:
+ *       201:
+ *         description: Return request created successfully with auto-generated RMA number
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ */
 router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const validation = CreateReturnRequestSchema.safeParse(req.body);
@@ -215,6 +391,50 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =
 // UPDATE RETURN REQUEST
 // ===========================================
 
+/**
+ * @openapi
+ * /returns/{id}:
+ *   put:
+ *     summary: Update return request
+ *     description: Update a return request's details. Only allowed in PENDING or APPROVED status.
+ *     tags:
+ *       - Returns
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Return request ID, UUID, or RMA number
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               requestedResolution:
+ *                 type: string
+ *                 enum: [REFUND, EXCHANGE, STORE_CREDIT]
+ *               customerNotes:
+ *                 type: string
+ *               adminNotes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Return request updated successfully
+ *       400:
+ *         description: Validation error or cannot update in current status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Return request not found
+ */
 router.put('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
