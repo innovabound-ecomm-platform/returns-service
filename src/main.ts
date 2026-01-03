@@ -1,8 +1,21 @@
-import { config } from './config';
-import { logger } from './config/logger';
-import { createApp } from './app';
+import { config } from './config/index.js';
+import { logger } from './config/logger.js';
+import { createApp } from './app.js';
+import { producer } from './kafka/index.js';
 
 async function bootstrap(): Promise<void> {
+  // Connect to Kafka producer
+  try {
+    await producer.connect();
+    logger.info("Kafka producer connected");
+  } catch (error) {
+    logger.error(
+      "Failed to connect to Kafka",
+      error instanceof Error ? error : new Error(String(error))
+    );
+    // Continue without Kafka - service can still handle HTTP requests
+  }
+
   const app = createApp();
 
   const server = app.listen(config.app.port, () => {
@@ -18,10 +31,22 @@ async function bootstrap(): Promise<void> {
   });
 
   // Graceful shutdown
-  const shutdown = (signal: string) => {
+  const shutdown = async (signal: string) => {
     logger.info(`${signal} received, shutting down gracefully...`);
-    server.close(() => {
+    
+    server.close(async () => {
       logger.info('Server closed');
+      
+      try {
+        await producer.disconnect();
+        logger.info("Kafka producer disconnected");
+      } catch (error) {
+        logger.error(
+          "Error during Kafka cleanup",
+          error instanceof Error ? error : new Error(String(error))
+        );
+      }
+      
       process.exit(0);
     });
 

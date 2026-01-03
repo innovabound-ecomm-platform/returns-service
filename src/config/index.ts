@@ -19,6 +19,11 @@ export const config = {
   database: {
     url: process.env.DATABASE_URL || '',
   },
+  kafka: {
+    brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+    clientId: 'returns-service',
+    groupId: 'returns-service-group',
+  },
   api: {
     title: 'Returns Service API',
     version: '1.0.0',
