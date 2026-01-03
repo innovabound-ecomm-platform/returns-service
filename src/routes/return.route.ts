@@ -16,7 +16,7 @@ import returnStatusRoutes from './return-status.route';
 import returnItemsRoutes from './return-items.route';
 import returnShippingRoutes from './return-shipping.route';
 
-const router = Router();
+const router: Router = Router();
 
 // Compose all sub-routes
 // CRUD routes (/, /:id)

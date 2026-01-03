@@ -9,7 +9,7 @@ import { GenerateLabelSchema, MarkShippedSchema } from '../schemas/return.schema
 import { addReturnHistory, buildReturnLookupWhere, isReturnAdmin } from './helpers/return.helpers';
 
 const prisma = getReturnsPrisma();
-const router = Router();
+const router: Router = Router();
 
 // ===========================================
 // GET RETURN HISTORY

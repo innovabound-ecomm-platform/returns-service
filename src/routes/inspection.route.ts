@@ -7,7 +7,7 @@ import {
   SubmitInspectionSchema,
 } from '../schemas/return.schema';
 
-const router = Router();
+const router: Router = Router();
 
 // ===========================================
 // HELPER FUNCTIONS

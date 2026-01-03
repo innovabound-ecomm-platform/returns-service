@@ -13,7 +13,7 @@ import {
 import { buildReturnLookupWhere, isReturnAdmin } from './helpers/return.helpers';
 
 const prisma = getReturnsPrisma();
-const router = Router();
+const router: Router = Router();
 
 // ===========================================
 // RETURN ITEMS - LIST

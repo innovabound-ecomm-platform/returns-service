@@ -8,7 +8,7 @@ import {
   UpdateReturnPolicySchema,
 } from '../schemas/return.schema';
 
-const router = Router();
+const router: Router = Router();
 
 // ===========================================
 // LIST RETURN POLICIES

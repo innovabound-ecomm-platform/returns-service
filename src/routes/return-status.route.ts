@@ -13,7 +13,7 @@ import {
 import { addReturnHistory, buildReturnLookupWhere, isReturnAdmin } from './helpers/return.helpers';
 
 const prisma = getReturnsPrisma();
-const router = Router();
+const router: Router = Router();
 
 // ===========================================
 // APPROVE RETURN (Admin only)
