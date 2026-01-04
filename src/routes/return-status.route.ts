@@ -11,6 +11,7 @@ import {
   ReceiveReturnSchema,
 } from '../schemas/return.schema';
 import { addReturnHistory, buildReturnLookupWhere, isReturnAdmin } from './helpers/return.helpers';
+import { getSiteId, returnRequestWhere } from '../utils/tenant.utils';
 
 const prisma = getReturnsPrisma();
 const router: Router = Router();
@@ -70,6 +71,7 @@ router.post(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
+      const siteId = getSiteId(req);
 
       const validation = ApproveReturnSchema.safeParse(req.body);
       if (!validation.success) {
@@ -80,7 +82,7 @@ router.post(
       const data = validation.data;
 
       const existingReturn = await prisma.returnRequest.findFirst({
-        where: buildReturnLookupWhere(id),
+        where: returnRequestWhere(siteId, buildReturnLookupWhere(id), { strict: false }),
       });
 
       if (!existingReturn) {
@@ -97,7 +99,7 @@ router.post(
       const restockingFee = 0;
 
       const returnRequest = await prisma.returnRequest.update({
-        where: { id: existingReturn.id },
+        where: { id: existingReturn.id, siteId: existingReturn.siteId },
         data: {
           status: 'APPROVED',
           actualResolution: data.resolution,
@@ -187,6 +189,7 @@ router.post(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
+      const siteId = getSiteId(req);
 
       const validation = RejectReturnSchema.safeParse(req.body);
       if (!validation.success) {
@@ -197,7 +200,7 @@ router.post(
       const data = validation.data;
 
       const existingReturn = await prisma.returnRequest.findFirst({
-        where: buildReturnLookupWhere(id),
+        where: returnRequestWhere(siteId, buildReturnLookupWhere(id), { strict: false }),
       });
 
       if (!existingReturn) {
@@ -211,7 +214,7 @@ router.post(
       }
 
       const returnRequest = await prisma.returnRequest.update({
-        where: { id: existingReturn.id },
+        where: { id: existingReturn.id, siteId: existingReturn.siteId },
         data: {
           status: 'REJECTED',
           adminNotes: data.adminNotes || data.reason,
@@ -302,6 +305,7 @@ router.post(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
+      const siteId = getSiteId(req);
 
       const validation = ReceiveReturnSchema.safeParse(req.body);
       if (!validation.success) {
@@ -312,7 +316,7 @@ router.post(
       const data = validation.data;
 
       const existingReturn = await prisma.returnRequest.findFirst({
-        where: buildReturnLookupWhere(id),
+        where: returnRequestWhere(siteId, buildReturnLookupWhere(id), { strict: false }),
         include: { items: true },
       });
 
@@ -340,7 +344,7 @@ router.post(
       }
 
       const returnRequest = await prisma.returnRequest.update({
-        where: { id: existingReturn.id },
+        where: { id: existingReturn.id, siteId: existingReturn.siteId },
         data: {
           status: 'RECEIVED',
           receivedAt: new Date(),
@@ -417,9 +421,10 @@ router.post('/:id/cancel', requireAuth, async (req: AuthenticatedRequest, res: R
   try {
     const { id } = req.params;
     const { reason } = req.body;
+    const siteId = getSiteId(req);
 
     const existingReturn = await prisma.returnRequest.findFirst({
-      where: buildReturnLookupWhere(id),
+      where: returnRequestWhere(siteId, buildReturnLookupWhere(id), { strict: false }),
     });
 
     if (!existingReturn) {
@@ -441,7 +446,7 @@ router.post('/:id/cancel', requireAuth, async (req: AuthenticatedRequest, res: R
     }
 
     const returnRequest = await prisma.returnRequest.update({
-      where: { id: existingReturn.id },
+      where: { id: existingReturn.id, siteId: existingReturn.siteId },
       data: {
         status: 'CANCELLED',
         updatedBy: req.user!.id,

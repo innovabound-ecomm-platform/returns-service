@@ -11,6 +11,7 @@ import {
   SetItemDispositionSchema,
 } from '../schemas/return.schema';
 import { buildReturnLookupWhere, isReturnAdmin } from './helpers/return.helpers';
+import { getSiteId, returnRequestWhere } from '../utils/tenant.utils';
 
 const prisma = getReturnsPrisma();
 const router: Router = Router();
@@ -50,9 +51,10 @@ const router: Router = Router();
 router.get('/:id/items', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const siteId = getSiteId(req);
 
     const existingReturn = await prisma.returnRequest.findFirst({
-      where: buildReturnLookupWhere(id),
+      where: returnRequestWhere(siteId, buildReturnLookupWhere(id), { strict: false }),
     });
 
     if (!existingReturn) {
@@ -157,6 +159,7 @@ router.get('/:id/items', requireAuth, async (req: AuthenticatedRequest, res: Res
 router.post('/:id/items', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const siteId = getSiteId(req);
 
     const validation = AddReturnItemSchema.safeParse(req.body);
     if (!validation.success) {
@@ -167,7 +170,7 @@ router.post('/:id/items', requireAuth, async (req: AuthenticatedRequest, res: Re
     const data = validation.data;
 
     const existingReturn = await prisma.returnRequest.findFirst({
-      where: buildReturnLookupWhere(id),
+      where: returnRequestWhere(siteId, buildReturnLookupWhere(id), { strict: false }),
     });
 
     if (!existingReturn) {
@@ -285,6 +288,7 @@ router.post('/:id/items', requireAuth, async (req: AuthenticatedRequest, res: Re
 router.put('/:returnId/items/:itemId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { returnId, itemId } = req.params;
+    const siteId = getSiteId(req);
 
     const validation = UpdateReturnItemSchema.safeParse(req.body);
     if (!validation.success) {
@@ -295,7 +299,7 @@ router.put('/:returnId/items/:itemId', requireAuth, async (req: AuthenticatedReq
     const data = validation.data;
 
     const existingReturn = await prisma.returnRequest.findFirst({
-      where: buildReturnLookupWhere(returnId),
+      where: returnRequestWhere(siteId, buildReturnLookupWhere(returnId), { strict: false }),
     });
 
     if (!existingReturn) {

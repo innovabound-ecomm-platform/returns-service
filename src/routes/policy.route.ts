@@ -7,6 +7,7 @@ import {
   CreateReturnPolicySchema,
   UpdateReturnPolicySchema,
 } from '../schemas/return.schema';
+import { getSiteId, returnPolicyWhere, withSiteId } from '../utils/tenant.utils';
 
 const router: Router = Router();
 
@@ -38,11 +39,14 @@ const router: Router = Router();
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { active } = req.query;
+    const siteId = (req as { siteId?: string }).siteId;
 
-    const where: Record<string, unknown> = {};
+    const additionalWhere: Record<string, unknown> = {};
     if (active === 'true') {
-      where.isActive = true;
+      additionalWhere.isActive = true;
     }
+
+    const where = returnPolicyWhere(siteId, additionalWhere, { strict: false });
 
     const policies = await prisma.returnPolicy.findMany({
       where,
@@ -84,11 +88,13 @@ router.get('/', async (req: Request, res: Response) => {
  */
 router.get('/default', async (req: Request, res: Response) => {
   try {
+    const siteId = (req as { siteId?: string }).siteId;
+
     const policy = await prisma.returnPolicy.findFirst({
-      where: {
+      where: returnPolicyWhere(siteId, {
         isDefault: true,
         isActive: true,
-      },
+      }, { strict: false }),
     });
 
     if (!policy) {
@@ -133,14 +139,15 @@ router.get('/default', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const siteId = (req as { siteId?: string }).siteId;
 
     const policy = await prisma.returnPolicy.findFirst({
-      where: {
+      where: returnPolicyWhere(siteId, {
         OR: [
           { id: parseInt(id as string) || 0 },
           { uuid: id },
         ],
-      },
+      }, { strict: false }),
     });
 
     if (!policy) {
@@ -231,17 +238,18 @@ router.post(
       }
 
       const data = validation.data;
+      const siteId = getSiteId(req);
 
       // If setting as default, unset other defaults
       if (data.isDefault) {
         await prisma.returnPolicy.updateMany({
-          where: { isDefault: true },
+          where: returnPolicyWhere(siteId, { isDefault: true }, { strict: false }),
           data: { isDefault: false },
         });
       }
 
       const policy = await prisma.returnPolicy.create({
-        data: {
+        data: withSiteId({
           name: data.name,
           slug: data.name.toLowerCase().replace(/\s+/g, '-'),
           description: data.description,
@@ -256,7 +264,7 @@ router.post(
           isActive: data.isActive,
           createdBy: req.user!.id,
           updatedBy: req.user!.id,
-        },
+        }, siteId),
       });
 
       res.status(201).json(policy);
@@ -340,6 +348,7 @@ router.put(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
+      const siteId = getSiteId(req);
 
       const validation = UpdateReturnPolicySchema.safeParse(req.body);
       if (!validation.success) {
@@ -350,12 +359,12 @@ router.put(
       const data = validation.data;
 
       const existingPolicy = await prisma.returnPolicy.findFirst({
-        where: {
+        where: returnPolicyWhere(siteId, {
           OR: [
             { id: parseInt(id as string) || 0 },
             { uuid: id },
           ],
-        },
+        }, { strict: false }),
       });
 
       if (!existingPolicy) {
@@ -366,16 +375,16 @@ router.put(
       // If setting as default, unset other defaults
       if (data.isDefault) {
         await prisma.returnPolicy.updateMany({
-          where: {
+          where: returnPolicyWhere(siteId, {
             isDefault: true,
             id: { not: existingPolicy.id },
-          },
+          }, { strict: false }),
           data: { isDefault: false },
         });
       }
 
       const policy = await prisma.returnPolicy.update({
-        where: { id: existingPolicy.id },
+        where: { id: existingPolicy.id, siteId: existingPolicy.siteId },
         data: {
           ...data,
           updatedBy: req.user!.id,
@@ -431,14 +440,15 @@ router.delete(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
+      const siteId = getSiteId(req);
 
       const policy = await prisma.returnPolicy.findFirst({
-        where: {
+        where: returnPolicyWhere(siteId, {
           OR: [
             { id: parseInt(id as string) || 0 },
             { uuid: id },
           ],
-        },
+        }, { strict: false }),
       });
 
       if (!policy) {
@@ -450,7 +460,7 @@ router.delete(
       if (policy.isDefault) {
         // Soft delete by deactivating
         await prisma.returnPolicy.update({
-          where: { id: policy.id },
+          where: { id: policy.id, siteId: policy.siteId },
           data: {
             isActive: false,
             isDefault: false,
@@ -463,7 +473,7 @@ router.delete(
       }
 
       await prisma.returnPolicy.delete({
-        where: { id: policy.id },
+        where: { id: policy.id, siteId: policy.siteId },
       });
 
       res.json({ message: 'Return policy deleted' });
@@ -525,6 +535,7 @@ router.delete(
 router.post('/check-eligibility', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { orderId, orderDate, productIds, categoryIds } = req.body;
+    const siteId = getSiteId(req);
 
     if (!orderId || !orderDate) {
       res.status(400).json({ error: 'orderId and orderDate are required' });
@@ -533,10 +544,10 @@ router.post('/check-eligibility', requireAuth, async (req: AuthenticatedRequest,
 
     // Get applicable policy (default for now, could be category-specific)
     const policy = await prisma.returnPolicy.findFirst({
-      where: {
+      where: returnPolicyWhere(siteId, {
         isDefault: true,
         isActive: true,
-      },
+      }, { strict: false }),
     });
 
     if (!policy) {

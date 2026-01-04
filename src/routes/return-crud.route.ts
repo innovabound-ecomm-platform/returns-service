@@ -11,6 +11,7 @@ import {
   ReturnListQuerySchema,
 } from '../schemas/return.schema';
 import { generateRmaNumber, addReturnHistory, buildReturnLookupWhere, isReturnAdmin } from './helpers/return.helpers';
+import { getSiteId, returnRequestWhere, withSiteId } from '../utils/tenant.utils';
 
 const prisma = getReturnsPrisma();
 const router: Router = Router();
@@ -104,26 +105,29 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =>
     const { page, limit, status, userId, orderId, resolution, reason, fromDate, toDate, sortBy, sortOrder } = validation.data;
 
     const isAdmin = isReturnAdmin(req.user!.roles);
+    const siteId = getSiteId(req);
 
-    const where: Record<string, unknown> = {};
+    const additionalWhere: Record<string, unknown> = {};
 
     // Non-admins can only see their own returns
     if (!isAdmin) {
-      where.userId = req.user!.id;
+      additionalWhere.userId = req.user!.id;
     } else if (userId) {
-      where.userId = userId;
+      additionalWhere.userId = userId;
     }
 
-    if (status) where.status = status;
-    if (orderId) where.orderId = orderId;
-    if (resolution) where.requestedResolution = resolution;
-    if (reason) where.reason = reason;
+    if (status) additionalWhere.status = status;
+    if (orderId) additionalWhere.orderId = orderId;
+    if (resolution) additionalWhere.requestedResolution = resolution;
+    if (reason) additionalWhere.reason = reason;
 
     if (fromDate || toDate) {
-      where.createdAt = {};
-      if (fromDate) (where.createdAt as Record<string, Date>).gte = fromDate;
-      if (toDate) (where.createdAt as Record<string, Date>).lte = toDate;
+      additionalWhere.createdAt = {};
+      if (fromDate) (additionalWhere.createdAt as Record<string, Date>).gte = fromDate;
+      if (toDate) (additionalWhere.createdAt as Record<string, Date>).lte = toDate;
     }
+
+    const where = returnRequestWhere(siteId, additionalWhere, { strict: false });
 
     const [returns, total] = await Promise.all([
       prisma.returnRequest.findMany({
@@ -192,9 +196,10 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =>
 router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const siteId = getSiteId(req);
 
     const returnRequest = await prisma.returnRequest.findFirst({
-      where: buildReturnLookupWhere(id),
+      where: returnRequestWhere(siteId, buildReturnLookupWhere(id), { strict: false }),
       include: {
         items: {
           include: {
@@ -328,12 +333,13 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =
 
     const data = validation.data;
     const userId = data.userId || req.user!.id;
+    const siteId = getSiteId(req);
 
     // Calculate totals
     const subtotal = data.items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
 
     const returnRequest = await prisma.returnRequest.create({
-      data: {
+      data: withSiteId({
         rmaNumber: generateRmaNumber(),
         orderId: data.orderId,
         userId,
@@ -363,7 +369,7 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =
             updatedBy: req.user!.id,
           })),
         },
-      },
+      }, siteId),
       include: {
         items: true,
       },
@@ -438,6 +444,7 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =
 router.put('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const siteId = getSiteId(req);
 
     const validation = UpdateReturnRequestSchema.safeParse(req.body);
     if (!validation.success) {
@@ -448,7 +455,7 @@ router.put('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
     const data = validation.data;
 
     const existingReturn = await prisma.returnRequest.findFirst({
-      where: buildReturnLookupWhere(id),
+      where: returnRequestWhere(siteId, buildReturnLookupWhere(id), { strict: false }),
     });
 
     if (!existingReturn) {
@@ -470,7 +477,7 @@ router.put('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
     }
 
     const returnRequest = await prisma.returnRequest.update({
-      where: { id: existingReturn.id },
+      where: { id: existingReturn.id, siteId: existingReturn.siteId },
       data: {
         ...data,
         updatedBy: req.user!.id,
